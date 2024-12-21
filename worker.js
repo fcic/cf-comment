@@ -22,7 +22,7 @@ export default {
         return handleCommentAreaPage(request, env);
       }
     } else if (pathname.startsWith('/area/') && request.method === 'POST') {
-      // 评论或举报
+      // 评论 or 举报
       if (pathname.endsWith('/comment')) {
         return handlePostComment(request, env);
       }
@@ -31,7 +31,7 @@ export default {
       }
     }
 
-    // 匹配删除/隐藏/删除讨论区等操作
+    // 管理端操作
     if (pathname.startsWith('/admin/') && request.method === 'POST') {
       // /admin/area/<area_key>/delete
       // /admin/area/<area_key>/toggleHide
@@ -43,10 +43,18 @@ export default {
       if (matchHideArea) {
         return handleToggleHideArea(matchHideArea[1], request, env);
       }
+
       // /admin/reports/resolve/<id>
       const matchResolveReport = pathname.match(/^\/admin\/reports\/resolve\/(\d+)$/);
       if (matchResolveReport) {
         return handleResolveReport(parseInt(matchResolveReport[1], 10), request, env);
+      }
+
+      // 新增: /admin/comment/<id>/toggleHide (隐藏/恢复单条评论)
+      const matchToggleHideComment = pathname.match(/^\/admin\/comment\/(\d+)\/toggleHide$/);
+      if (matchToggleHideComment) {
+        const commentId = parseInt(matchToggleHideComment[1], 10);
+        return handleToggleHideComment(commentId, request, env);
       }
     }
 
@@ -75,10 +83,11 @@ function parseCookie(cookieHeader) {
 function escapeHtml(str) {
   if (!str) return '';
   return str
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /** 简易 Markdown 转 HTML，示例仅演示，如需更完整可用第三方库 */
@@ -280,7 +289,7 @@ async function handleHomePage(request, env) {
         renderReportList(data.reports);
       }
 
-      // 渲染讨论区列表（已修复多行字符串写法）
+      // 渲染讨论区列表
       function renderAreaList(areas) {
         const div = document.getElementById('areaList');
         if (areas.length === 0) {
@@ -361,13 +370,15 @@ async function handleHomePage(request, env) {
               <td>\${r.id}</td>
               <td>\${r.comment_id}</td>
               <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                \${r.comment_content}
+                \${r.comment_content || ''}
               </td>
               <td>\${r.reason}</td>
               <td>\${r.created_at}</td>
               <td>\${r.resolved ? '是' : '否'}</td>
               <td>
                 \${r.resolved ? '' : \`<button onclick="resolveReport(\${r.id})">标记已处理</button>\`}
+                <!-- 新增: 管理员可以隐藏/恢复该条评论 -->
+                <button onclick="toggleHideComment(\${r.comment_id})">隐藏/恢复</button>
               </td>
             </tr>
           \`;
@@ -379,11 +390,22 @@ async function handleHomePage(request, env) {
         div.innerHTML = html;
       }
 
-      // 切换隐藏
+      // 切换讨论区隐藏
       async function toggleHideArea(areaKey) {
         const res = await fetch('/admin/area/' + areaKey + '/toggleHide', { method: 'POST' });
         if (res.ok) {
           showNotification('操作成功');
+          await fetchExtendedInfo();
+        } else {
+          showNotification('操作失败：' + (await res.text()));
+        }
+      }
+
+      // 切换单条评论隐藏
+      async function toggleHideComment(commentId) {
+        const res = await fetch('/admin/comment/' + commentId + '/toggleHide', { method: 'POST' });
+        if (res.ok) {
+          showNotification('评论隐藏状态已切换');
           await fetchExtendedInfo();
         } else {
           showNotification('操作失败：' + (await res.text()));
@@ -573,6 +595,19 @@ async function handleCommentAreaPage(request, env) {
       }
       .notification-bar.hidden { display: none; }
       .close-btn { cursor: pointer; margin-left: 20px; font-weight: bold; }
+
+      /* 隐藏评论时，仅显示占位/按钮 */
+      .hidden-comment-placeholder {
+        font-style: italic; 
+        color: #888; 
+      }
+
+      .show-btn {
+        color: #bbb; 
+        margin-left: 8px; 
+        text-decoration: underline; 
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -629,6 +664,9 @@ async function handleCommentAreaPage(request, env) {
         return roots;
       }
 
+      // 判断是否登录管理员
+      const authed = document.cookie.includes('auth=1');
+
       // 渲染评论树
       function renderComments(comments) {
         const listEl = document.getElementById('commentList');
@@ -646,19 +684,76 @@ async function handleCommentAreaPage(request, env) {
       function renderCommentItem(comment) {
         const div = document.createElement('div');
         div.className = 'comment-item' + (comment.parent_id ? ' reply-item' : '');
-        div.innerHTML = \`
-          <div class="markdown-content">\${comment.html_content}</div>
-          <small style="color:#777;">\${comment.created_at || ''}</small>
-          <span class="reply-btn" onclick="startReply(\${comment.id})">回复</span>
-          <span class="report-btn" onclick="reportComment(\${comment.id})">举报</span>
-        \`;
+        // 如果评论被隐藏
+        if (comment.hidden === 1) {
+          // 管理员可直接查看原文，普通用户默认折叠
+          if (authed) {
+            // 管理员视角: 可看到原文 + 「隐藏/恢复」操作
+            div.innerHTML = \`
+              <div class="markdown-content" style="border-left:2px solid #444; padding-left:8px;">
+                [隐藏的评论，管理员可见]<br/>
+                \${comment.html_content}
+              </div>
+              <small style="color:#777;">\${comment.created_at || ''}</small>
+              <span class="reply-btn" onclick="startReply(\${comment.id})">回复</span>
+              <span class="report-btn" onclick="reportComment(\${comment.id})">举报</span>
+              <button onclick="toggleHideComment(\${comment.id})">
+                恢复隐藏
+              </button>
+            \`;
+          } else {
+            // 普通用户: 仅显示「此评论已被隐藏」，点击「查看」再展开
+            div.innerHTML = \`
+              <div class="hidden-comment-placeholder">
+                此评论已被隐藏
+                <span class="show-btn" onclick="toggleHiddenContent(this, \${comment.id})">查看</span>
+              </div>
+              <div class="hidden-content" style="display:none;">
+                <div class="markdown-content">\${comment.html_content}</div>
+                <small style="color:#777;">\${comment.created_at || ''}</small>
+                <span class="reply-btn" onclick="startReply(\${comment.id})">回复</span>
+                <span class="report-btn" onclick="reportComment(\${comment.id})">举报</span>
+              </div>
+            \`;
+          }
+        } else {
+          // 未隐藏
+          div.innerHTML = \`
+            <div class="markdown-content">\${comment.html_content}</div>
+            <small style="color:#777;">\${comment.created_at || ''}</small>
+            <span class="reply-btn" onclick="startReply(\${comment.id})">回复</span>
+            <span class="report-btn" onclick="reportComment(\${comment.id})">举报</span>
+            \${authed ? \`<button onclick="toggleHideComment(\${comment.id})">隐藏</button>\` : ''}
+          \`;
+        }
 
+        // 若有子回复
         if (comment.replies && comment.replies.length > 0) {
           comment.replies.forEach(r => {
             div.appendChild(renderCommentItem(r));
           });
         }
         return div;
+      }
+
+      // 前端切换「已隐藏」评论的显示/折叠
+      window.toggleHiddenContent = (trigger, commentId) => {
+        const wrapper = trigger.closest('.hidden-comment-placeholder').nextElementSibling;
+        if (!wrapper) return;
+        const isHidden = (wrapper.style.display === 'none');
+        wrapper.style.display = isHidden ? 'block' : 'none';
+        trigger.textContent = isHidden ? '收起' : '查看';
+      };
+
+      // 切换单条评论隐藏(仅管理员)
+      window.toggleHideComment = async (commentId) => {
+        const res = await fetch('/admin/comment/' + commentId + '/toggleHide', { method: 'POST' });
+        if (res.ok) {
+          showNotification('评论隐藏状态已切换');
+          await loadComments();
+        } else {
+          showNotification('操作失败：' + (await res.text()));
+        }
       }
 
       // 启动回复
@@ -732,7 +827,7 @@ async function handleGetComments(request, env) {
   }
 
   const res = await env.DB.prepare(`
-    SELECT id, content, parent_id, created_at 
+    SELECT id, content, parent_id, created_at, hidden
     FROM comments
     WHERE area_key = ?
     ORDER BY id ASC
@@ -770,7 +865,11 @@ async function handlePostComment(request, env) {
     const params = new URLSearchParams();
     params.append('secret', env.TURNSTILE_SECRET_KEY);
     params.append('response', token || '');
-    const verifyRes = await fetch(verifyUrl, { method: 'POST', body: params, headers: { "Content-Type":"application/x-www-form-urlencoded" } });
+    const verifyRes = await fetch(verifyUrl, {
+      method: 'POST',
+      body: params,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    });
     const verifyData = await verifyRes.json();
     if (!verifyData.success) {
       return new Response("Turnstile验证失败", { status: 403 });
@@ -786,9 +885,9 @@ async function handlePostComment(request, env) {
     return new Response("该讨论区不可用", { status: 403 });
   }
 
-  // 插入数据库
+  // 插入数据库 (默认 hidden=0)
   await env.DB.prepare(`
-    INSERT INTO comments (area_key, content, parent_id) VALUES (?, ?, ?)
+    INSERT INTO comments (area_key, content, parent_id, hidden) VALUES (?, ?, ?, 0)
   `).bind(areaKey, content, parentId).run();
 
   return new Response("OK", { status: 200 });
@@ -818,6 +917,7 @@ async function handleReportComment(request, env) {
   await env.DB.prepare("INSERT INTO reports (comment_id, reason) VALUES (?, ?)").bind(commentId, reason).run();
   return new Response("OK", { status: 200 });
 }
+
 /** 删除讨论区 (管理员) */
 async function handleDeleteArea(areaKeyEncoded, request, env) {
   const cookie = parseCookie(request.headers.get("Cookie") || "");
@@ -838,7 +938,7 @@ async function handleDeleteArea(areaKeyEncoded, request, env) {
   return new Response("OK", { status: 200 });
 }
 
-/** 切换隐藏状态 (管理员) */
+/** 切换讨论区隐藏状态 (管理员) */
 async function handleToggleHideArea(areaKeyEncoded, request, env) {
   const cookie = parseCookie(request.headers.get("Cookie") || "");
   if (cookie.auth !== "1") {
@@ -852,6 +952,22 @@ async function handleToggleHideArea(areaKeyEncoded, request, env) {
   }
   const newHidden = area.hidden === 1 ? 0 : 1;
   await env.DB.prepare("UPDATE comment_areas SET hidden=? WHERE area_key=?").bind(newHidden, areaKey).run();
+  return new Response("OK", { status: 200 });
+}
+
+/** 切换单条评论隐藏状态 (管理员) */
+async function handleToggleHideComment(commentId, request, env) {
+  const cookie = parseCookie(request.headers.get("Cookie") || "");
+  if (cookie.auth !== "1") {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  // 查询是否存在
+  const comment = await env.DB.prepare("SELECT hidden FROM comments WHERE id=?").bind(commentId).first();
+  if (!comment) {
+    return new Response("该评论不存在", { status: 404 });
+  }
+  const newHidden = comment.hidden === 1 ? 0 : 1;
+  await env.DB.prepare("UPDATE comments SET hidden=? WHERE id=?").bind(newHidden, commentId).run();
   return new Response("OK", { status: 200 });
 }
 
