@@ -3,6 +3,10 @@
 一个基于 [Cloudflare Workers](https://workers.cloudflare.com/) 运行的简单评论系统，支持回复、点赞、举报以及管理员后台管理功能；同时提供中英双语切换，方便更广泛地使用。  
 A simple comment system running on [Cloudflare Workers](https://workers.cloudflare.com/), supporting replies, likes, reports, and an admin management interface. It also provides bilingual (Chinese and English) support for broader usage.
 
+
+![alt text](./img/1-en.png)
+![alt text](./img/2-cn.png)
+
 ---
 
 ## 目录 (Table of Contents)
@@ -70,8 +74,6 @@ A simple comment system running on [Cloudflare Workers](https://workers.cloudfla
   使用 Cloudflare Turnstile 校验用户提交信息，防范垃圾评论。  
   Uses Cloudflare Turnstile to validate user submissions and combat spam.
 
-![alt text](./img/1-en.png)
-![alt text](./img/2-cn.png)
 
 ---
 
