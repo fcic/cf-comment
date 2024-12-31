@@ -1,5 +1,7 @@
 # Cloudflare Worker 评论系统
 
+English(./readme.md)|简体中文(./readme-cn.md)
+
 一个基于 Cloudflare Workers 运行的简单评论系统，支持 Markdown 语法、回复、点赞、举报，以及管理员后台管理功能。
 Mixing版，更方便手机用户部署
 
