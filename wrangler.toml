@@ -1,0 +1,11 @@
+name = "comments-worker"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "comments"
+database_id = ""    # Will be set during deployment
+
+[vars]
+DEFAULT_TURNSTILE_SITE_KEY = "你的默认Turnstile Site Key"
+ADMIN_PASSWORD = "1234"   #your passwords
