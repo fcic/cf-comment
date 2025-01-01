@@ -80,6 +80,8 @@ A simple comment system running on [Cloudflare Workers](https://workers.cloudfla
 
 ## 部署指南 | Deployment Guide
 
+[![Deploy](https://img.shields.io/badge/Deploy%20to-Cloudflare-orange)](https://deploy.workers.cloudflare.com/?url=https://github.com/joyance-professional/cf-comments-mixing)(需要先创建D1，一样要修改环境变量)
+
 以下步骤将指导你如何在 Cloudflare Workers 上快速部署本评论系统。  
 The following steps will guide you through deploying this comment system on Cloudflare Workers.
 
