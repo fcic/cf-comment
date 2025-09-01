@@ -3,9 +3,9 @@ compatibility_date = "2024-01-01"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "comments"
-database_id = ""    # Will be set during deployment
+database_name = "cloud-mail"
+database_id = "6f41960f-3175-44a1-9758-ad125e3dc74f"    # Will be set during deployment
 
 [vars]
-DEFAULT_TURNSTILE_SITE_KEY = "你的默认Turnstile Site Key"
+DEFAULT_TURNSTILE_SITE_KEY = "0x4AAAAAABvj8wTkPPAbmCP5"
 ADMIN_PASSWORD = "1234"   #your passwords
