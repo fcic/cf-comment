@@ -8,5 +8,6 @@ database_name = "cloud-mail"
 database_id = "6f41960f-3175-44a1-9758-ad125e3dc74f"    # Will be set during deployment
 
 [vars]
-DEFAULT_TURNSTILE_SITE_KEY = "0x4AAAAAABvj8wTkPPAbmCP5"
-ADMIN_PASS = "1234"   #your passwords
+TURNSTILE_SITE_KEY = "0x4AAAAAABvj8wTkPPAbmCP5"
+TURNSTILE_SECRET_KEY = "0x4AAAAAABvj8_cBBktzVr5-T3IoQYpJemU"
+ADMIN_PASS = "fcic."   #your passwords
